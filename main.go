@@ -2,61 +2,92 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 
-	"github.com/lwnmengjing/core-go/config"
-	"github.com/lwnmengjing/core-go/config/source/file"
-
+	"github.com/c-bata/go-prompt"
+	"github.com/google/uuid"
 	"github.com/lwnmengjing/micro-service-gen-tool/pkg"
+	"github.com/mitchellh/go-homedir"
 )
 
 func init() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
-	flag.Parse()
+	flag.Parsed()
 }
 
-var (
-	service     = flag.String("service", "", "generate service name")
-	templateUrl = flag.String("templateUrl", "", "from template")
-	configPath  = flag.String("config", "config.yml", "config file path")
-	createRepo  = flag.Bool("createRepo", false, "auto create repo to github")
-)
+func emptyCompleter(_ prompt.Document) []prompt.Suggest {
+	s := make([]prompt.Suggest, 0)
+	return s
+}
 
-func main() {
-	var err error
-	var c pkg.TemplateConfig
-	config.DefaultConfig, err = config.NewConfig(
-		config.WithEntity(&c),
-		config.WithSource(
-			file.NewSource(
-				file.WithPath(*configPath))))
-	if err != nil { // Handle errors reading the config file
-		log.Fatalf("Fatal error config file: %s \n", err.Error())
-	}
-	if err = config.Scan(&c); err != nil {
-		//if err = v.Unmarshal(&c); err != nil {
-		log.Fatalln(err)
-	}
-	if *service != "" {
-		c.Service = *service
-	}
-	if *templateUrl != "" {
-		c.TemplateUrl = *templateUrl
-	}
-	if *createRepo {
-		c.CreateRepo = *createRepo
-	}
-	if c.CreateRepo {
-		if c.Github.Name == "" {
-			c.Github.Name = c.Service
+func subPathCompleter(sub []string) prompt.Completer {
+	s := make([]prompt.Suggest, len(sub))
+	for i := range sub {
+		s[i] = prompt.Suggest{
+			Text:        sub[i],
+			Description: fmt.Sprintf("select template %s", sub[i]),
 		}
 	}
-	if c.Destination == "" {
-		c.Destination = "."
+	return func(in prompt.Document) []prompt.Suggest {
+		return prompt.FilterHasPrefix(s, in.GetWordBeforeCursor(), true)
 	}
-	c.Destination = filepath.Join(c.Destination, c.Service)
-	err = pkg.Generate(&c)
+}
+
+func main() {
+	repo := prompt.Input("(default: git@github.com:lwnmengjing/template-demo.git: ",
+		emptyCompleter)
+	if repo == "" {
+		repo = "git@github.com:lwnmengjing/template-demo.git"
+	}
+	fmt.Println("Your input: ", repo)
+	home, err := homedir.Dir()
+	privateKeyFile := filepath.Join(home, ".ssh", "id_rsa")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	templateWorkspace := filepath.Join("/tmp", uuid.New().String())
+	err = pkg.GitCloneSSH(repo, templateWorkspace, "main", privateKeyFile, "")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	os.RemoveAll(filepath.Join(templateWorkspace, ".git"))
+	defer os.RemoveAll(templateWorkspace)
+	sub, err := pkg.GetSubPath(templateWorkspace)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if len(sub) == 0 {
+		log.Fatalln("not found template")
+	}
+	subPath := prompt.Input(fmt.Sprintf("select template(default:%s): ", sub[0]), subPathCompleter(sub))
+	if subPath == "" {
+		subPath = sub[0]
+	}
+	projectName := prompt.Input("project name(default: default): ", emptyCompleter)
+	if projectName == "" {
+		log.Fatalln("project name can't empty")
+	}
+	keys, err := pkg.GetParseFromTemplate(filepath.Join(templateWorkspace, subPath))
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	for key := range keys {
+		keys[key] = prompt.Input(fmt.Sprintf("template params %s >>>", key), emptyCompleter)
+	}
+	fmt.Println(keys)
+
+	err = pkg.Generate(&pkg.TemplateConfig{
+		TemplateLocal: templateWorkspace,
+		CreateRepo:    false,
+		Destination:   filepath.Join(".", projectName),
+		Github:        nil,
+		Params:        keys,
+		Ignore:        nil,
+	})
 	if err != nil {
 		log.Fatalln(err)
 	}

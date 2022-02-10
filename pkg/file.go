@@ -74,3 +74,27 @@ func FileCopy(src, dst string) (int64, error) {
 	nBytes, err := io.Copy(destination, source)
 	return nBytes, err
 }
+
+// GetSubPath get directory's subject path
+func GetSubPath(directory string) ([]string, error) {
+	dirs, err := os.ReadDir(directory)
+	if err != nil {
+		return nil, err
+	}
+	subPath := make([]string, 0)
+	for i := range dirs {
+		if dirs[i].IsDir() {
+			subPath = append(subPath, dirs[i].Name())
+		}
+	}
+	return subPath, nil
+}
+
+func substr(s string, pos, length int) string {
+	runes := []rune(s)
+	l := pos + length
+	if l > len(runes) {
+		l = len(runes)
+	}
+	return string(runes[pos:l])
+}

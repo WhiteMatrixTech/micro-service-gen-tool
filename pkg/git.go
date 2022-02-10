@@ -9,12 +9,17 @@ package pkg
 
 import (
 	"context"
+	"log"
+	"os"
+
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
+	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/google/go-github/v41/github"
+	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
-	"log"
 )
 
 type GithubConfig struct {
@@ -65,6 +70,28 @@ func GitClone(url, directory string, noCheckout bool, accessToken string) error 
 		Auth:              auth,
 	})
 	return err
+}
+
+// GitCloneSSH clone git repo from ssh
+func GitCloneSSH(url, directory, reference, privateKeyFile, password string) error {
+	_, err := os.Stat(privateKeyFile)
+	if err != nil {
+		return errors.Errorf("read file %s failed %s\n", privateKeyFile, err.Error())
+	}
+	publicKey, err := ssh.NewPublicKeysFromFile("git", privateKeyFile, password)
+	if err != nil {
+		return errors.Errorf("generate publickeys failed: %s\n", err.Error())
+	}
+	_, err = git.PlainClone(directory, false, &git.CloneOptions{
+		Auth:          publicKey,
+		URL:           url,
+		Progress:      os.Stdout,
+		ReferenceName: plumbing.NewBranchReferenceName(reference),
+	})
+	if err != nil {
+		return errors.Errorf("clone repo error: %s", err.Error())
+	}
+	return nil
 }
 
 // CreateGithubRepo create github repo
