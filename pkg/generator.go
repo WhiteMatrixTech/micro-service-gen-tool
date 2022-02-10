@@ -16,6 +16,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/sanity-io/litter"
 	"github.com/zealic/xignore"
 )
 
@@ -111,8 +112,17 @@ func Generate(c *TemplateConfig) (err error) {
 			return err
 		}
 		if templateResultIgnore != nil {
-			t.TemplateIgnoreDirs = templateResultIgnore.MatchedDirs
-			t.TemplateIgnoreFiles = templateResultIgnore.MatchedFiles
+
+			for i := range templateResultIgnore.MatchedDirs {
+				t.TemplateIgnoreDirs = append(t.TemplateIgnoreDirs,
+					strings.Join(strings.Split(templateResultIgnore.MatchedDirs[i], "/")[1:], "/"))
+			}
+			for i := range templateResultIgnore.MatchedDirs {
+				t.TemplateIgnoreFiles = append(t.TemplateIgnoreFiles,
+					strings.Join(strings.Split(templateResultIgnore.MatchedDirs[i], "/")[1:], "/"))
+			}
+			//t.TemplateIgnoreDirs = templateResultIgnore.MatchedDirs
+			//t.TemplateIgnoreFiles = templateResultIgnore.MatchedFiles
 		}
 		//_ = os.RemoveAll(filepath.Join(templatePath, TemplateIgnore))
 		templateParseResultIgnore, err := xignore.DirMatches(rootPath, &xignore.MatchesOptions{
@@ -129,6 +139,8 @@ func Generate(c *TemplateConfig) (err error) {
 		}
 		_ = os.RemoveAll(filepath.Join(rootPath, TemplateParseIgnore))
 	}
+
+	litter.Dump(t)
 
 	if err = t.Traverse(); err != nil {
 		log.Println(err)

@@ -6,12 +6,15 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/c-bata/go-prompt"
 	"github.com/google/uuid"
 	"github.com/lwnmengjing/micro-service-gen-tool/pkg"
 	"github.com/mitchellh/go-homedir"
 )
+
+var defaultTemplate = "git@github.com:Reimia/matrix-microservice-template.git"
 
 func init() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
@@ -37,10 +40,10 @@ func subPathCompleter(sub []string) prompt.Completer {
 }
 
 func main() {
-	repo := prompt.Input("(default: git@github.com:lwnmengjing/template-demo.git: ",
+	repo := prompt.Input(fmt.Sprintf("(default: %s: ", defaultTemplate),
 		emptyCompleter)
 	if repo == "" {
-		repo = "git@github.com:lwnmengjing/template-demo.git"
+		repo = defaultTemplate
 	}
 	fmt.Println("Your input: ", repo)
 	home, err := homedir.Dir()
@@ -49,12 +52,14 @@ func main() {
 		log.Fatalln(err)
 	}
 	templateWorkspace := filepath.Join("/tmp", uuid.New().String())
+	fmt.Printf("git clone start: %s \n", time.Now().String())
 	err = pkg.GitCloneSSH(repo, templateWorkspace, "main", privateKeyFile, "")
 	if err != nil {
 		log.Fatalln(err)
 	}
+	fmt.Printf("git clone end: %s \n", time.Now().String())
 	os.RemoveAll(filepath.Join(templateWorkspace, ".git"))
-	defer os.RemoveAll(templateWorkspace)
+	//defer os.RemoveAll(templateWorkspace)
 	sub, err := pkg.GetSubPath(templateWorkspace)
 	if err != nil {
 		log.Fatalln(err)
@@ -68,7 +73,7 @@ func main() {
 	}
 	projectName := prompt.Input("project name(default: default): ", emptyCompleter)
 	if projectName == "" {
-		log.Fatalln("project name can't empty")
+		projectName = "default"
 	}
 	keys, err := pkg.GetParseFromTemplate(filepath.Join(templateWorkspace, subPath))
 	if err != nil {
@@ -76,12 +81,11 @@ func main() {
 	}
 
 	for key := range keys {
-		keys[key] = prompt.Input(fmt.Sprintf("template params %s >>>", key), emptyCompleter)
+		keys[key] = prompt.Input(fmt.Sprintf("template params %s: ", key), emptyCompleter)
 	}
-	fmt.Println(keys)
 
 	err = pkg.Generate(&pkg.TemplateConfig{
-		TemplateLocal: templateWorkspace,
+		TemplateLocal: filepath.Join(templateWorkspace, subPath),
 		CreateRepo:    false,
 		Destination:   filepath.Join(".", projectName),
 		Github:        nil,
