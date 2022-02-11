@@ -3,7 +3,6 @@ module github.com/lwnmengjing/micro-service-gen-tool
 go 1.17
 
 require (
-	github.com/c-bata/go-prompt v0.2.6
 	github.com/go-git/go-git/v5 v5.4.2
 	github.com/google/go-github/v41 v41.0.0
 	github.com/google/uuid v1.2.0
@@ -13,8 +12,6 @@ require (
 	github.com/zealic/xignore v0.3.3
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
 )
-
-replace github.com/c-bata/go-prompt => ../../c-bata/go-prompt
 
 require (
 	github.com/BurntSushi/toml v0.3.1 // indirect
@@ -33,13 +30,8 @@ require (
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kevinburke/ssh_config v0.0.0-20201106050909-4977a11b4351 // indirect
-	github.com/mattn/go-colorable v0.1.7 // indirect
-	github.com/mattn/go-isatty v0.0.12 // indirect
-	github.com/mattn/go-runewidth v0.0.9 // indirect
-	github.com/mattn/go-tty v0.0.3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/pkg/term v1.2.0-beta.2 // indirect
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/spf13/afero v1.6.0 // indirect
 	github.com/xanzy/ssh-agent v0.3.0 // indirect
