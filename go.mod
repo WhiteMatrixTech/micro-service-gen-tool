@@ -10,10 +10,11 @@ require (
 	github.com/lwnmengjing/core-go v0.0.0-20210901063543-31becf58670e
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pkg/errors v0.9.1
-	github.com/sanity-io/litter v1.5.2
 	github.com/zealic/xignore v0.3.3
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8
 )
+
+replace github.com/c-bata/go-prompt => ../../c-bata/go-prompt
 
 require (
 	github.com/BurntSushi/toml v0.3.1 // indirect

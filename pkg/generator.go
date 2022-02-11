@@ -16,12 +16,12 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/sanity-io/litter"
 	"github.com/zealic/xignore"
 )
 
 // Generator generate operator
 type Generator struct {
+	SubPath                  string
 	TemplatePath             string
 	DestinationPath          string
 	Cfg                      interface{}
@@ -54,7 +54,7 @@ func Generate(c *TemplateConfig) (err error) {
 		//}
 		//defer os.RemoveAll(templatePath)
 	}
-	rootPath := substr(templatePath, 0, strings.LastIndex(templatePath, string(filepath.Separator)))
+	subPath := filepath.Join(templatePath, c.Service)
 
 	if !c.CreateRepo {
 		c.Github = nil
@@ -63,6 +63,7 @@ func Generate(c *TemplateConfig) (err error) {
 	_ = os.RemoveAll(c.Destination)
 
 	t := &Generator{
+		SubPath:                  c.Service,
 		TemplatePath:             templatePath,
 		DestinationPath:          c.Destination,
 		Cfg:                      c.Params,
@@ -103,7 +104,7 @@ func Generate(c *TemplateConfig) (err error) {
 	}
 
 	{
-		templateResultIgnore, err := xignore.DirMatches(rootPath, &xignore.MatchesOptions{
+		templateResultIgnore, err := xignore.DirMatches(subPath, &xignore.MatchesOptions{
 			Ignorefile: TemplateIgnore,
 			Nested:     true, // Handle nested ignorefile
 		})
@@ -125,7 +126,7 @@ func Generate(c *TemplateConfig) (err error) {
 			//t.TemplateIgnoreFiles = templateResultIgnore.MatchedFiles
 		}
 		//_ = os.RemoveAll(filepath.Join(templatePath, TemplateIgnore))
-		templateParseResultIgnore, err := xignore.DirMatches(rootPath, &xignore.MatchesOptions{
+		templateParseResultIgnore, err := xignore.DirMatches(subPath, &xignore.MatchesOptions{
 			Ignorefile: TemplateParseIgnore,
 			Nested:     true,
 		})
@@ -134,13 +135,11 @@ func Generate(c *TemplateConfig) (err error) {
 			return err
 		}
 		if templateParseResultIgnore != nil {
-			t.TemplateParseIgnoreDirs = templateParseResultIgnore.MatchedDirs
-			t.TemplateParseIgnoreFiles = templateParseResultIgnore.MatchedFiles
+			t.TemplateParseIgnoreDirs = append(t.TemplateParseIgnoreDirs, templateParseResultIgnore.MatchedDirs...)
+			t.TemplateParseIgnoreFiles = append(t.TemplateParseIgnoreFiles, templateParseResultIgnore.MatchedFiles...)
 		}
-		_ = os.RemoveAll(filepath.Join(rootPath, TemplateParseIgnore))
+		_ = os.RemoveAll(filepath.Join(subPath, TemplateParseIgnore))
 	}
-
-	litter.Dump(t)
 
 	if err = t.Traverse(); err != nil {
 		log.Println(err)
@@ -159,7 +158,7 @@ func Generate(c *TemplateConfig) (err error) {
 
 // Traverse traverse all dir
 func (e *Generator) Traverse() error {
-	return filepath.WalkDir(e.TemplatePath, e.TraverseFunc)
+	return filepath.WalkDir(filepath.Join(e.TemplatePath, e.SubPath), e.TraverseFunc)
 }
 
 // TraverseFunc traverse callback
@@ -171,14 +170,17 @@ func (e *Generator) TraverseFunc(path string, f os.DirEntry, err error) error {
 	// template ignore
 	if len(e.TemplateIgnoreDirs) > 0 {
 		for i := range e.TemplateIgnoreDirs {
-			if f.IsDir() && strings.Index(path, filepath.Join(e.TemplatePath, e.TemplateIgnoreDirs[i])) == 0 {
+			if f.IsDir() &&
+				(strings.Index(path, filepath.Join(e.TemplatePath, e.TemplateIgnoreDirs[i])) == 0 ||
+					strings.Index(path, filepath.Join(e.TemplatePath, e.SubPath, e.TemplateIgnoreDirs[i])) == 0) {
 				return nil
 			}
 		}
 	}
 	if len(e.TemplateIgnoreFiles) > 0 {
 		for i := range e.TemplateIgnoreFiles {
-			if filepath.Join(e.TemplatePath, e.TemplateIgnoreFiles[i]) == path {
+			if filepath.Join(e.TemplatePath, e.TemplateIgnoreFiles[i]) == path ||
+				filepath.Join(e.TemplatePath, e.SubPath, e.TemplateIgnoreFiles[i]) == path {
 				return nil
 			}
 		}
@@ -191,7 +193,7 @@ func (e *Generator) TraverseFunc(path string, f os.DirEntry, err error) error {
 		log.Println(err)
 		return err
 	}
-	path = strings.ReplaceAll(buffer.String(), e.TemplatePath, e.DestinationPath)
+	path = strings.ReplaceAll(buffer.String(), filepath.Join(e.TemplatePath, e.SubPath), e.DestinationPath)
 
 	if f.IsDir() {
 		// dir
@@ -204,14 +206,16 @@ func (e *Generator) TraverseFunc(path string, f os.DirEntry, err error) error {
 	// template parse ignore
 	if len(e.TemplateParseIgnoreDirs) > 0 {
 		for i := range e.TemplateParseIgnoreDirs {
-			if strings.Index(templatePath, filepath.Join(e.TemplatePath, e.TemplateParseIgnoreDirs[i])) == 0 {
+			if strings.Index(templatePath, filepath.Join(e.TemplatePath, e.TemplateParseIgnoreDirs[i])) == 0 ||
+				strings.Index(templatePath, filepath.Join(e.SubPath, e.TemplatePath, e.TemplateParseIgnoreDirs[i])) == 0 {
 				parseIgnore = true
 			}
 		}
 	}
 	if !parseIgnore && len(e.TemplateParseIgnoreFiles) > 0 {
 		for i := range e.TemplateParseIgnoreFiles {
-			if filepath.Join(e.TemplatePath, e.TemplateParseIgnoreFiles[i]) == templatePath {
+			if filepath.Join(e.TemplatePath, e.TemplateParseIgnoreFiles[i]) == templatePath ||
+				filepath.Join(e.SubPath, e.TemplatePath, e.TemplateParseIgnoreFiles[i]) == templatePath {
 				parseIgnore = true
 			}
 		}
