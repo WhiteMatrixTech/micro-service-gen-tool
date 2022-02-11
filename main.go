@@ -13,30 +13,12 @@ import (
 	"github.com/mitchellh/go-homedir"
 )
 
-var defaultTemplate = "git@github.com:Reimia/matrix-microservice-template.git"
+var defaultTemplate = "git@github.com:WhiteMatrixTech/matrix-microservice-template.git"
 
 func init() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 	flag.Parsed()
 }
-
-//func emptyCompleter(_ prompt.Document) []prompt.Suggest {
-//	s := make([]prompt.Suggest, 0)
-//	return s
-//}
-//
-//func subPathCompleter(sub []string) prompt.Completer {
-//	s := make([]prompt.Suggest, len(sub))
-//	for i := range sub {
-//		s[i] = prompt.Suggest{
-//			Text:        sub[i],
-//			Description: fmt.Sprintf("select template %s", sub[i]),
-//		}
-//	}
-//	return func(in prompt.Document) []prompt.Suggest {
-//		return prompt.FilterHasPrefix(s, in.GetWordBeforeCursor(), true)
-//	}
-//}
 
 func main() {
 	var err error
@@ -45,7 +27,7 @@ func main() {
 	fmt.Printf("template repo (default:%s):", defaultTemplate)
 	_, _ = fmt.Scanf("%s", &repo)
 	fmt.Println("your template repo:", repo)
-	branch := ""
+	branch := "main"
 	fmt.Printf("template repo branch(default:'%s'):", branch)
 	_, _ = fmt.Scanf("%s", &branch)
 	home, err := homedir.Dir()
@@ -56,7 +38,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	templateWorkspace := "/tmp"
+	templateWorkspace := "/tmp/template-workspace"
 	fmt.Printf("template workspace(default:%s):", templateWorkspace)
 	_, _ = fmt.Scanf("%s", &templateWorkspace)
 	templateWorkspace = filepath.Join(templateWorkspace, uuid.New().String())
@@ -70,7 +52,7 @@ func main() {
 	}
 	fmt.Printf("git clone end: %s \n", time.Now().String())
 	os.RemoveAll(filepath.Join(templateWorkspace, ".git"))
-	//defer os.RemoveAll(templateWorkspace)
+	defer os.RemoveAll(templateWorkspace)
 	sub, err := pkg.GetSubPath(templateWorkspace)
 	if err != nil {
 		log.Fatalln(err)
@@ -82,9 +64,20 @@ func main() {
 	for i := range sub {
 		fmt.Println(sub[i])
 	}
+SUBPATH:
 	subPath := sub[0]
 	fmt.Printf("select template sub path(default:%s):", subPath)
 	_, _ = fmt.Scanf("%s", &subPath)
+	ok := false
+	for i := range sub {
+		if sub[i] == subPath {
+			ok = true
+		}
+	}
+	if !ok {
+		fmt.Println("please select exist sub path.")
+		goto SUBPATH
+	}
 	projectName := "default"
 	fmt.Printf("project name(default:%s)", projectName)
 	_, _ = fmt.Scanf("%s", &projectName)

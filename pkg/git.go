@@ -9,6 +9,7 @@ package pkg
 
 import (
 	"context"
+	"github.com/go-git/go-git/v5/plumbing"
 	"log"
 	"os"
 
@@ -82,10 +83,11 @@ func GitCloneSSH(url, directory, reference, privateKeyFile, password string) err
 		return errors.Errorf("generate publickeys failed: %s\n", err.Error())
 	}
 	_, err = git.PlainClone(directory, false, &git.CloneOptions{
-		Auth:     publicKey,
-		URL:      url,
-		Progress: os.Stdout,
-		//ReferenceName: plumbing.NewBranchReferenceName(reference),
+		Auth:          publicKey,
+		URL:           url,
+		Progress:      os.Stdout,
+		Depth:         1,
+		ReferenceName: plumbing.NewBranchReferenceName(reference),
 	})
 	if err != nil {
 		return errors.Errorf("clone repo error: %s", err.Error())
