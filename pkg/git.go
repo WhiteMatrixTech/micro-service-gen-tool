@@ -56,18 +56,18 @@ func GitRemote(url, directory string) error {
 }
 
 // GitClone clone git repo
-func GitClone(url, directory string, noCheckout bool, accessToken string) error {
+func GitCloneViaDeployerAccount(url, directory, reference, accessToken string) error {
 	auth := &http.BasicAuth{}
 	if accessToken != "" {
-		//fixme username not valid
-		auth.Username = "username"
+		auth.Username = "whitematrix-deployer" // this is hardcoded
 		auth.Password = accessToken
 	}
 	_, err := git.PlainClone(directory, false, &git.CloneOptions{
-		URL:               url,
-		NoCheckout:        noCheckout,
-		RecurseSubmodules: git.DefaultSubmoduleRecursionDepth,
-		Auth:              auth,
+		Auth:          auth,
+		URL:           url,
+		Progress:      os.Stdout,
+		Depth:         1,
+		ReferenceName: plumbing.NewBranchReferenceName(reference),
 	})
 	return err
 }

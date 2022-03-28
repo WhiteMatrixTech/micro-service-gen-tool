@@ -2,13 +2,13 @@ package run
 
 import (
 	"fmt"
+	"github.com/mitchellh/go-homedir"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 
 	"github.com/mss-boot-io/micro-service-gen-tool/pkg"
@@ -28,7 +28,11 @@ var (
 			return run()
 		},
 	}
-	defaultTemplate = "git@github.com:WhiteMatrixTech/matrix-microservice-template.git"
+	// If using repoGitCloneSSHWithPrompts, use this value
+	// defaultTemplate = "git@github.com:WhiteMatrixTech/matrix-microservice-template.git"
+
+	// If using repoGitCloneViaDeployerAccount, use this value
+	defaultTemplate = "https://github.com/WhiteMatrixTech/matrix-microservice-template.git"
 )
 
 func pre() {
@@ -37,35 +41,67 @@ func pre() {
 	}
 }
 
-func run() error {
-	log.SetFlags(log.Lshortfile | log.LstdFlags)
-	var err error
-	//var repo string
-	repo := defaultTemplate
-	fmt.Printf("template repo (default:%s): ", pkg.Yellow(defaultTemplate))
-	_, _ = fmt.Scanf("%s", &repo)
-	fmt.Println("your template repo: ", pkg.Cyan(repo))
-	branch := "main"
-	fmt.Printf("template repo branch(default:'%s'): ", pkg.Yellow(branch))
-	_, _ = fmt.Scanf("%s", &branch)
+/*
+	SSH Git, not use now in favor of git S3 git token way
+	TODO may consider add back if there is a better way of using it
+*/
+func repoGitCloneSSHWithPrompts(repo, templateWorkspace, branch string) error {
 	home, err := homedir.Dir()
+	if err != nil {
+		return err
+	}
+
+	var password string
+
+	// private ID
 	privateID := "id_rsa"
-	fmt.Printf("private key id(default:%s): ", pkg.Yellow(privateID))
+	fmt.Printf("private key id (default: %s): ", pkg.Yellow(privateID))
 	_, _ = fmt.Scanf("%s", &privateID)
 	privateKeyFile := filepath.Join(home, ".ssh", privateID)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	templateWorkspace := "/tmp/template-workspace"
-	fmt.Printf("template workspace(default:%s): ", pkg.Yellow(templateWorkspace))
-	_, _ = fmt.Scanf("%s", &templateWorkspace)
-	templateWorkspace = filepath.Join(templateWorkspace, uuid.New().String())
-	var password string
-	fmt.Printf("private pem password(default:%s): ", pkg.Yellow("''"))
+
+	// password
+	fmt.Printf("private pem password (default: %s): ", pkg.Yellow("''"))
 	_, _ = fmt.Scanf("%s", &password)
 	fmt.Printf("git clone start: %s \n", time.Now().String())
 	fmt.Println(privateKeyFile)
-	err = pkg.GitCloneSSH(repo, templateWorkspace, branch, privateKeyFile, password)
+
+	// do the git clone
+	return pkg.GitCloneSSH(repo, templateWorkspace, branch, privateKeyFile, password)
+}
+
+func repoGitCloneViaDeployerAccount(repo, templateWorkspace, branch string) error {
+	token, err := pkg.ReadTokenFromS3()
+	if err != nil {
+		return err
+	}
+	return pkg.GitCloneViaDeployerAccount(repo, templateWorkspace, branch, token)
+}
+
+func run() error {
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
+	var err error
+
+	// template repo
+	repo := defaultTemplate
+	fmt.Printf("template repo (default: %s): ", pkg.Yellow(defaultTemplate))
+	_, _ = fmt.Scanf("%s", &repo)
+	fmt.Println("your template repo: ", pkg.Cyan(repo))
+
+	// git branch
+	branch := "main"
+	fmt.Printf("template repo branch (default: '%s'): ", pkg.Yellow(branch))
+	_, _ = fmt.Scanf("%s", &branch)
+
+	// workspace file location
+	templateWorkspace := "/tmp/template-workspace"
+	fmt.Printf("template workspace (default: %s): ", pkg.Yellow(templateWorkspace))
+	_, _ = fmt.Scanf("%s", &templateWorkspace)
+	templateWorkspace = filepath.Join(templateWorkspace, uuid.New().String())
+
+	// TODO we can replace repoGitCloneViaDeployerAccount with the SSH one below
+	// err = repoGitCloneSSHWithPrompts(repo, templateWorkspace, branch)
+	err = repoGitCloneViaDeployerAccount(repo, templateWorkspace, branch)
+
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -77,7 +113,7 @@ func run() error {
 		log.Fatalln(err)
 	}
 	if len(sub) == 0 {
-		log.Fatalln("not found template")
+		log.Fatalln("template not found!")
 	}
 	fmt.Println(pkg.Yellow("************* please select sub path ***************"))
 	for i := range sub {
