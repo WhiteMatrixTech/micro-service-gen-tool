@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -54,7 +55,7 @@ func repoGitCloneSSHWithPrompts(repo, templateWorkspace, branch string) error {
 	var password string
 
 	// private ID
-	privateID := "id_rsa"
+	privateID := "id_ed25519"
 	fmt.Printf("private key id (default: %s): ", pkg.Yellow(privateID))
 	_, _ = fmt.Scanf("%s", &privateID)
 	privateKeyFile := filepath.Join(home, ".ssh", privateID)
@@ -99,8 +100,11 @@ func run() error {
 	templateWorkspace = filepath.Join(templateWorkspace, uuid.New().String())
 
 	// TODO we can replace repoGitCloneViaDeployerAccount with the SSH one below
-	// err = repoGitCloneSSHWithPrompts(repo, templateWorkspace, branch)
-	err = repoGitCloneViaDeployerAccount(repo, templateWorkspace, branch)
+	if strings.Index(repo, "@") > 0 {
+		err = repoGitCloneSSHWithPrompts(repo, templateWorkspace, branch)
+	} else {
+		err = repoGitCloneViaDeployerAccount(repo, templateWorkspace, branch)
+	}
 
 	if err != nil {
 		log.Fatalln(err)
