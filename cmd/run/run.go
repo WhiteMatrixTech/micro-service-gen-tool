@@ -73,6 +73,7 @@ func repoGitCloneSSHWithPrompts(repo, templateWorkspace, branch string) error {
 func repoGitCloneViaDeployerAccount(repo, templateWorkspace, branch string) error {
 	token, err := pkg.ReadTokenFromS3()
 	if err != nil {
+		fmt.Println(pkg.Red("Failed to read the Github token from S3, please make sure you have correct aws credentials set up."))
 		return err
 	}
 	return pkg.GitCloneViaDeployerAccount(repo, templateWorkspace, branch, token)
