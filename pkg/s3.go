@@ -8,13 +8,21 @@ import (
 	"log"
 )
 
-func ReadTokenFromS3() (string, error) {
-	// this is hardcoded
-	s3Session := s3.New(session.Must(session.NewSession(&aws.Config{
-		Region: aws.String("us-west-2")},
-	)))
+var s3Session *s3.S3 = nil
 
-	rawObject, err := s3Session.GetObject(
+func getS3Session() *s3.S3 {
+	// this is hardcoded
+	if s3Session == nil {
+		s3Session = s3.New(session.Must(session.NewSession(&aws.Config{
+			Region: aws.String("us-west-2")},
+		)))
+	}
+	return s3Session
+}
+
+func ReadTokenFromS3() (string, error) {
+
+	rawObject, err := getS3Session().GetObject(
 		&s3.GetObjectInput{
 			Bucket: aws.String("whitematrix-internal"),
 			Key:    aws.String("github-access-tokens/code-gen-tool-token.txt"),

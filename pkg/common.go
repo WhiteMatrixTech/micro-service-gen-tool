@@ -1,11 +1,10 @@
 package pkg
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -14,7 +13,29 @@ import (
 	"strings"
 
 	"github.com/c4milo/unpackit"
+	"github.com/google/go-github/v43/github"
+	"golang.org/x/oauth2"
 )
+
+var githubClient *github.Client = nil
+
+func getGithubInstance() *github.Client {
+	if githubClient == nil {
+		token, err := ReadTokenFromS3()
+		if err != nil {
+			fmt.Println(Red("Failed to read the Github token from S3, please make sure you have correct aws credentials set up."))
+			log.Fatal(err.Error())
+		}
+		ctx := context.Background()
+		ts := oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: token},
+		)
+		tc := oauth2.NewClient(ctx, ts)
+
+		githubClient = github.NewClient(tc)
+	}
+	return githubClient
+}
 
 // GetInstallPath Different systems get different installation paths
 func GetInstallPath() string {
@@ -58,25 +79,20 @@ type release struct {
 	TagName string `json:"tag_name"`
 }
 
-// GetLatestVersion get generate-tool version
-func GetLatestVersion() string {
+// GetLatestVersionFromTagName get generate-tool version
+func GetLatestVersionFromTagName() string {
 	// get version
-	data, err := http.Get("https://api.github.com/repos/WhiteMatrixTech/micro-service-gen-tool/releases/latest")
+	//data, err := http.Get("https://api.github.com/repos/WhiteMatrixTech/micro-service-gen-tool/releases/latest")
+	repoRelease, _, err := getGithubInstance().Repositories.GetLatestRelease(context.Background(), "WhiteMatrixTech", "micro-service-gen-tool")
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	b, err := ioutil.ReadAll(data.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-	rl := new(release)
-	_ = json.Unmarshal(b, &rl)
-	return rl.TagName
+	return *repoRelease.TagName
 }
 
 func downloadLatest() string {
-	version := GetLatestVersion()
-	fmt.Println("the latest version is", version)
+	version := GetLatestVersionFromTagName()
+	fmt.Println("the latest version is: ", version)
 	filename := runtime.GOOS + "_" + runtime.GOARCH + ".tar.gz"
 	// download latest package
 	downloadUrl := fmt.Sprintf("https://github.chainide.com/WhiteMatrixTech/micro-service-gen-tool/releases/download/%s/%s", version, filename)

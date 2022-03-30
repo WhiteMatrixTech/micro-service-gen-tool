@@ -17,9 +17,9 @@ func Install() {
 
 // Upgrade check update
 func Upgrade(ask bool) {
-	if GetLatestVersion() != version.Version {
+	if GetLatestVersionFromTagName() != version.Version {
 		//need update
-		fmt.Printf("do you need to upgrade[%s]: ", Yellow("y/n"))
+		fmt.Printf("do you need to upgrade [%s]: ", Yellow("y/n"))
 		var upgrade bool
 		if !ask {
 			upgrade = true
