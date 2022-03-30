@@ -1,6 +1,8 @@
 package pkg
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestUpdate(t *testing.T) {
 	tests := []struct {
@@ -10,7 +12,12 @@ func TestUpdate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			Install()
+			_, err := ReadTokenFromS3()
+			if err != nil {
+				t.Log("Errored during testing, this is expected during testing in Github Action if AWS credential is not setup")
+			} else {
+				Install()
+			}
 		})
 	}
 }

@@ -7,6 +7,7 @@ require (
 	github.com/c4milo/unpackit v0.1.0
 	github.com/go-git/go-git/v5 v5.4.2
 	github.com/google/go-github/v41 v41.0.0
+	github.com/google/go-github/v43 v43.0.0
 	github.com/google/uuid v1.2.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pkg/errors v0.9.1

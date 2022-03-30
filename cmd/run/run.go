@@ -118,7 +118,7 @@ func run() error {
 		log.Fatalln(err)
 	}
 	if len(sub) == 0 {
-		log.Fatalln("template not found!")
+		log.Fatalln("Template not found!")
 	}
 	fmt.Println(pkg.Yellow("************* please select sub path ***************"))
 	for i := range sub {
@@ -127,7 +127,7 @@ func run() error {
 	fmt.Println(pkg.Yellow("****************************************************"))
 SUBPATH:
 	subPath := sub[0]
-	fmt.Printf("select template sub path(default:%s): ", pkg.Cyan(subPath))
+	fmt.Printf("select template sub path (default: %s): ", pkg.Cyan(subPath))
 	_, _ = fmt.Scanf("%s", &subPath)
 	ok := false
 	for i := range sub {
