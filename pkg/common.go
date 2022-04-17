@@ -13,29 +13,7 @@ import (
 	"strings"
 
 	"github.com/c4milo/unpackit"
-	"github.com/google/go-github/v43/github"
-	"golang.org/x/oauth2"
 )
-
-var githubClient *github.Client = nil
-
-func getGithubInstance() *github.Client {
-	if githubClient == nil {
-		token, err := ReadTokenFromS3()
-		if err != nil {
-			fmt.Println(Red("Failed to read the Github token from S3, please make sure you have correct aws credentials set up."))
-			log.Fatal(err.Error())
-		}
-		ctx := context.Background()
-		ts := oauth2.StaticTokenSource(
-			&oauth2.Token{AccessToken: token},
-		)
-		tc := oauth2.NewClient(ctx, ts)
-
-		githubClient = github.NewClient(tc)
-	}
-	return githubClient
-}
 
 // GetInstallPath Different systems get different installation paths
 func GetInstallPath() string {
@@ -83,7 +61,7 @@ type release struct {
 func GetLatestVersionFromTagName() string {
 	// get version
 	//data, err := http.Get("https://api.github.com/repos/WhiteMatrixTech/micro-service-gen-tool/releases/latest")
-	repoRelease, _, err := getGithubInstance().Repositories.GetLatestRelease(context.Background(), "WhiteMatrixTech", "micro-service-gen-tool")
+	repoRelease, _, err := GetDefaultGithubInstance().Repositories.GetLatestRelease(context.Background(), "WhiteMatrixTech", "micro-service-gen-tool")
 	if err != nil {
 		log.Fatal(err.Error())
 	}
