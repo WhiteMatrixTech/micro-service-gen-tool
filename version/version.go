@@ -2,7 +2,8 @@ package version
 
 import "fmt"
 
-const Version = "v0.1.6"
+const Version = "v0.1.7"
+
 
 // getVersion Compulsory minimum version, Minimum downward compatibility to this version
 func getVersion() string {

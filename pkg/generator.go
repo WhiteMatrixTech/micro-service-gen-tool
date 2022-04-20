@@ -9,11 +9,13 @@ package pkg
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"mime"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -22,12 +24,12 @@ import (
 
 // Generator generate operator
 type Generator struct {
+	GenerationId             string
 	SubPath                  string
 	TemplatePath             string
 	DestinationPath          string
 	Cfg                      interface{}
 	GithubConfig             *GithubConfig
-	accessToken              string
 	TemplateIgnoreDirs       []string
 	TemplateIgnoreFiles      []string
 	TemplateParseIgnoreDirs  []string
@@ -35,14 +37,8 @@ type Generator struct {
 }
 
 // Generate example
-//func Generate(url, destinationPath string, cfg interface{}, githubConfig *GithubConfig, accessToken string) error {
-//	templatePath := filepath.Base(url)
 func Generate(c *TemplateConfig) (err error) {
 	var templatePath string
-	var accessToken string
-	//if c.Github != nil {
-	//	accessToken = c.Github.Token
-	//}
 	if c.TemplateLocal != "" {
 		templatePath = c.TemplateLocal
 	} else {
@@ -57,19 +53,16 @@ func Generate(c *TemplateConfig) (err error) {
 	}
 	subPath := filepath.Join(templatePath, c.Service)
 
-	if !c.CreateRepo {
-		c.Github = nil
-	}
 	//delete destinationPath
 	_ = os.RemoveAll(c.Destination)
 
 	t := &Generator{
+		GenerationId:             c.GenerationId,
 		SubPath:                  c.Service,
 		TemplatePath:             templatePath,
 		DestinationPath:          c.Destination,
 		Cfg:                      c.Params,
 		GithubConfig:             c.Github,
-		accessToken:              accessToken,
 		TemplateIgnoreDirs:       make([]string, 0),
 		TemplateIgnoreFiles:      make([]string, 0),
 		TemplateParseIgnoreDirs:  make([]string, 0),
@@ -142,14 +135,18 @@ func Generate(c *TemplateConfig) (err error) {
 		_ = os.RemoveAll(filepath.Join(subPath, TemplateParseIgnore))
 	}
 
+	// ensure github repo exists
+	if err = t.EnsureGithubRepo(); err != nil {
+		log.Println(err)
+		return err
+	}
+
 	if err = t.Traverse(); err != nil {
 		log.Println(err)
 		return err
 	}
-	if err = t.CreateGithubRepo(); err != nil {
-		log.Println(err)
-		return err
-	}
+
+	// commit the repo
 	if err = t.CommitGithubRepo(); err != nil {
 		log.Println(err)
 		return err
@@ -196,8 +193,11 @@ func (e *Generator) TraverseFunc(path string, f os.DirEntry, err error) error {
 	}
 	path = strings.ReplaceAll(buffer.String(), filepath.Join(e.TemplatePath, e.SubPath), e.DestinationPath)
 
+	log.Println("generating: " + f.Name())
+
 	if f.IsDir() {
 		// dir
+		log.Println("isDir: " + strconv.FormatBool(f.IsDir()))
 		if !PathExist(path) {
 			return PathCreate(path)
 		}
@@ -250,6 +250,7 @@ func (e *Generator) TraverseFunc(path string, f os.DirEntry, err error) error {
 	}
 	// create file
 	err = FileCreate(buffer, path, fi.Mode())
+	log.Println("file created: " + path)
 	if err != nil {
 		log.Println(err)
 		return err
@@ -258,36 +259,57 @@ func (e *Generator) TraverseFunc(path string, f os.DirEntry, err error) error {
 }
 
 // CreateGithubRepo create github repo
-func (e *Generator) CreateGithubRepo() error {
-	if e.GithubConfig == nil {
+func (e *Generator) EnsureGithubRepo() error {
+	if e.GithubConfig == nil || e.GithubConfig.Repository == "" {
 		return nil
 	}
-	repo, err := CreateGithubRepo(
-		e.GithubConfig.Organization,
-		e.GithubConfig.Name,
-		e.GithubConfig.Description,
-		e.accessToken, true)
+
+	// first check if the repo is already there
+	repoExists, err := CheckGithubRepoExistence("WhiteMatrixTech", e.GithubConfig.Repository)
 	if err != nil {
-		log.Println(err)
+		fmt.Println(Red("Failed to check repo existence for repo " + e.GithubConfig.Repository))
 		return err
 	}
-	err = PathCreate(e.DestinationPath)
-	if err != nil {
-		log.Println(err)
-		return err
-	}
-	err = GitRemote(repo.GetCloneURL(), e.DestinationPath)
-	if err != nil {
-		log.Println(err)
-		return err
+
+	if repoExists {
+		// if the repo exists, download it to local temp folder
+		url := "https://github.com/" + e.GithubConfig.Organization + "/" + e.GithubConfig.Repository + ".git"
+		err = GitCloneViaDeployerAccount(url, e.DestinationPath, e.GithubConfig.Branch, GetDefaultGithubToken())
+		if err != nil {
+			fmt.Println(Red("Failed to clone target repo from github."))
+			return err
+		}
+	} else {
+		// else create the repo
+		repo, err := CreateGithubRepo(
+			e.GithubConfig.Organization,
+			e.GithubConfig.Name,
+			e.GithubConfig.Description,
+			true)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		err = PathCreate(e.DestinationPath)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+
+		err = GitRemote(repo.GetCloneURL(), e.DestinationPath)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
 	}
 	return nil
 }
 
-// CommitGithubRepo commit repo to github
+// CommitGithubRepo if Github is set but create repo is not checked, then commit to an existing repo
 func (e *Generator) CommitGithubRepo() (err error) {
-	if e.GithubConfig == nil {
+	if e.GithubConfig == nil || e.GithubConfig.Repository == "" {
 		return nil
 	}
-	return CommitAndPushGithubRepo(e.DestinationPath, e.accessToken)
+	return CommitAndPushGithubRepo(e.DestinationPath, e.GenerationId)
 }

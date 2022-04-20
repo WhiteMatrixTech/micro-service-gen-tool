@@ -9,15 +9,17 @@ package pkg
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
+	"os/exec"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
-	"github.com/google/go-github/v41/github"
+	"github.com/google/go-github/v43/github"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
 )
@@ -25,9 +27,50 @@ import (
 type GithubConfig struct {
 	Name         string            `yaml:"name"`
 	Organization string            `yaml:"organization"`
+	Repository   string            `yaml:"repository"`
+	Branch       string            `yaml:"branch"`
 	Description  string            `yaml:"description"`
 	Secrets      map[string]string `yaml:"secrets"`
-	Token        string            `yaml:"token"`
+}
+
+type GithubConstantValues struct {
+	DefaultAccount      string
+	DefaultOrganization string
+	DefaultBranch       string
+}
+
+var GithubConstants = &GithubConstantValues{
+	DefaultAccount:      "whitematrix-deployer",
+	DefaultOrganization: "WhiteMatrixTech",
+	DefaultBranch:       "main",
+}
+
+var githubToken = ""
+var githubClient *github.Client = nil
+
+func GetDefaultGithubToken() string {
+	if githubToken == "" {
+		token, err := ReadTokenFromS3()
+		if err != nil {
+			fmt.Println(Red("Failed to read the Github token from S3, please make sure you have correct aws credentials set up."))
+			log.Fatal(err.Error())
+		}
+		githubToken = token
+	}
+	return githubToken
+}
+
+func GetDefaultGithubInstance() *github.Client {
+	if githubClient == nil {
+		ctx := context.Background()
+		ts := oauth2.StaticTokenSource(
+			&oauth2.Token{AccessToken: GetDefaultGithubToken()},
+		)
+		tc := oauth2.NewClient(ctx, ts)
+
+		githubClient = github.NewClient(tc)
+	}
+	return githubClient
 }
 
 // GitRemote from remote git
@@ -55,11 +98,22 @@ func GitRemote(url, directory string) error {
 	return nil
 }
 
+func CheckGithubRepoExistence(organization, repo string) (bool, error) {
+	_, resp, err := GetDefaultGithubInstance().Repositories.Get(context.Background(), organization, repo)
+	if resp != nil && resp.Response.StatusCode == 200 {
+		return true, nil
+	}
+	if resp != nil && resp.Response.StatusCode == 404 {
+		return false, nil
+	}
+	return false, err
+}
+
 // GitClone clone git repo
 func GitCloneViaDeployerAccount(url, directory, reference, accessToken string) error {
 	auth := &http.BasicAuth{}
 	if accessToken != "" {
-		auth.Username = "whitematrix-deployer" // this is hardcoded
+		auth.Username = GithubConstants.DefaultAccount // this is hardcoded
 		auth.Password = accessToken
 	}
 	_, err := git.PlainClone(directory, false, &git.CloneOptions{
@@ -96,14 +150,10 @@ func GitCloneSSH(url, directory, reference, privateKeyFile, password string) err
 }
 
 // CreateGithubRepo create github repo
-func CreateGithubRepo(organization, name, description, token string, private bool) (*github.Repository, error) {
-	ctx := context.Background()
-	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
-	tc := oauth2.NewClient(ctx, ts)
-	client := github.NewClient(tc)
+func CreateGithubRepo(organization, name, description string, private bool) (*github.Repository, error) {
 
 	r := &github.Repository{Name: &name, Private: &private, Description: &description}
-	repo, _, err := client.Repositories.Create(ctx, organization, r)
+	repo, _, err := GetDefaultGithubInstance().Repositories.Create(context.Background(), organization, r)
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -133,31 +183,38 @@ func CreateGithubRepo(organization, name, description, token string, private boo
 //}
 
 // CommitAndPushGithubRepo commit and push github repo
-func CommitAndPushGithubRepo(directory, accessToken string) error {
+func CommitAndPushGithubRepo(directory, branchName string) error {
 	r, err := git.PlainOpen(directory)
 	if err != nil {
 		log.Println(err)
 		return err
 	}
+
 	w, err := r.Worktree()
 	if err != nil {
 		log.Println(err)
 		return err
 	}
+
 	_, err = w.Add(".")
 	if err != nil {
 		log.Println(err)
 		return err
 	}
-	_, err = w.Commit(":tada: init project", &git.CommitOptions{})
+
+	_, err = w.Commit(":tada: added service package", &git.CommitOptions{})
 	if err != nil {
 		log.Println(err)
 		return err
 	}
-	return r.Push(&git.PushOptions{
-		Auth: &http.BasicAuth{
-			Username: "123",
-			Password: accessToken,
-		},
-	})
+
+	cmd := exec.Command("bash", "-c", fmt.Sprintf("git push origin main:refs/heads/%s -f", branchName))
+	cmd.Dir = directory
+	_, err = cmd.Output()
+	if err != nil {
+		log.Printf("failed to push: %v\n", err)
+		return err
+	}
+
+	return err
 }

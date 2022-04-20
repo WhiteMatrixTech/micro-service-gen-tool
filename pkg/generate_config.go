@@ -12,10 +12,10 @@ import (
 )
 
 type TemplateConfig struct {
+	GenerationId  string        `yaml:"generationId"`
 	Service       string        `yaml:"service"`
 	TemplateUrl   string        `yaml:"templateUrl"`
 	TemplateLocal string        `yaml:"templateLocal"`
-	CreateRepo    bool          `yaml:"createRepo"`
 	Destination   string        `yaml:"destination"`
 	Github        *GithubConfig `yaml:"github"`
 	Params        interface{}   `yaml:"params"`

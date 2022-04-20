@@ -33,7 +33,8 @@ var (
 	// defaultTemplate = "git@github.com:WhiteMatrixTech/matrix-microservice-template.git"
 
 	// If using repoGitCloneViaDeployerAccount, use this value
-	defaultTemplate = "https://github.com/WhiteMatrixTech/matrix-microservice-template.git"
+	githubOrgPrefix = "https://github.com/" + pkg.GithubConstants.DefaultOrganization + "/"
+	defaultTemplate = githubOrgPrefix + "matrix-microservice-template.git"
 )
 
 func pre() {
@@ -71,17 +72,15 @@ func repoGitCloneSSHWithPrompts(repo, templateWorkspace, branch string) error {
 }
 
 func repoGitCloneViaDeployerAccount(repo, templateWorkspace, branch string) error {
-	token, err := pkg.ReadTokenFromS3()
-	if err != nil {
-		fmt.Println(pkg.Red("Failed to read the Github token from S3, please make sure you have correct aws credentials set up."))
-		return err
-	}
-	return pkg.GitCloneViaDeployerAccount(repo, templateWorkspace, branch, token)
+	return pkg.GitCloneViaDeployerAccount(repo, templateWorkspace, branch, pkg.GetDefaultGithubToken())
 }
 
 func run() error {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 	var err error
+
+	generationId := uuid.New().String()
+	fmt.Println("ID for this generation is: " + pkg.Yellow(generationId))
 
 	// template repo
 	repo := defaultTemplate
@@ -90,30 +89,41 @@ func run() error {
 	fmt.Println("your template repo: ", pkg.Cyan(repo))
 
 	// git branch
-	branch := "main"
+	branch := pkg.GithubConstants.DefaultBranch
 	fmt.Printf("template repo branch (default: '%s'): ", pkg.Yellow(branch))
 	_, _ = fmt.Scanf("%s", &branch)
 
 	// workspace file location
-	templateWorkspace := "/tmp/template-workspace"
-	fmt.Printf("template workspace (default: %s): ", pkg.Yellow(templateWorkspace))
-	_, _ = fmt.Scanf("%s", &templateWorkspace)
-	templateWorkspace = filepath.Join(templateWorkspace, uuid.New().String())
+	workspaceRootFolder := filepath.Join("/tmp/micro-service-gen-tool-workspace", generationId)
+	fmt.Printf("workspace root folder for generation (default: %s): ", pkg.Yellow(workspaceRootFolder))
+	_, _ = fmt.Scanf("%s", &workspaceRootFolder)
+	workspaceTemplateFolder := filepath.Join(workspaceRootFolder, "template")
+
+	// template repo
+	defaultTargetRepo := "matrix-cloud-monorepo"
+	targetRepo := ""
+	fmt.Printf("target repo under orgnization %s (default: '%s'): ", githubOrgPrefix, pkg.Yellow(defaultTargetRepo))
+	_, _ = fmt.Scanf("%s", &targetRepo)
+	if targetRepo == "" {
+		fmt.Println(pkg.Yellow("using default value: " + defaultTargetRepo))
+		targetRepo = defaultTargetRepo
+	}
+	fmt.Println("your target repo: ", pkg.Cyan(targetRepo))
 
 	// TODO we can replace repoGitCloneViaDeployerAccount with the SSH one below
 	if strings.Index(repo, "@") > 0 {
-		err = repoGitCloneSSHWithPrompts(repo, templateWorkspace, branch)
+		err = repoGitCloneSSHWithPrompts(repo, workspaceTemplateFolder, branch)
 	} else {
-		err = repoGitCloneViaDeployerAccount(repo, templateWorkspace, branch)
+		err = repoGitCloneViaDeployerAccount(repo, workspaceTemplateFolder, branch)
 	}
 
 	if err != nil {
 		log.Fatalln(err)
 	}
 	fmt.Printf("git clone end: %s \n", time.Now().String())
-	_ = os.RemoveAll(filepath.Join(templateWorkspace, ".git"))
-	defer os.RemoveAll(templateWorkspace)
-	sub, err := pkg.GetSubPath(templateWorkspace)
+	_ = os.RemoveAll(filepath.Join(workspaceTemplateFolder, ".git"))
+	defer os.RemoveAll(workspaceTemplateFolder)
+	sub, err := pkg.GetSubPath(workspaceTemplateFolder)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -140,9 +150,9 @@ SUBPATH:
 		goto SUBPATH
 	}
 	projectName := "default"
-	fmt.Printf("project name(default:%s)", pkg.Yellow(projectName))
+	fmt.Printf("project name (default: %s): ", pkg.Yellow(projectName))
 	_, _ = fmt.Scanf("%s", &projectName)
-	keys, err := pkg.GetParseFromTemplate(templateWorkspace, subPath)
+	keys, err := pkg.GetParseFromTemplate(workspaceTemplateFolder, subPath)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -161,17 +171,25 @@ SUBPATH:
 	}
 
 	err = pkg.Generate(&pkg.TemplateConfig{
+		GenerationId:  generationId,
 		Service:       subPath,
-		TemplateLocal: templateWorkspace,
-		CreateRepo:    false,
-		Destination:   filepath.Join(".", projectName),
-		Github:        nil,
-		Params:        keys,
-		Ignore:        nil,
+		TemplateLocal: workspaceTemplateFolder,
+		Destination:   filepath.Join(workspaceRootFolder, projectName),
+		Github: &pkg.GithubConfig{
+			Name:         "default",
+			Organization: pkg.GithubConstants.DefaultOrganization,
+			Repository:   targetRepo,
+			Branch:       pkg.GithubConstants.DefaultBranch,
+			Description:  "dummy description",
+			Secrets:      nil,
+		},
+		Params: keys,
+		Ignore: nil,
 	})
 	if err != nil {
 		log.Fatalln(err)
 	}
-	fmt.Println(pkg.Green("template generate project success...."))
+	fmt.Println(pkg.Green("template generate project success..."))
+	fmt.Println(pkg.Green(fmt.Sprintf("Please checkout your commit at %s/tree/%s", githubOrgPrefix+targetRepo, generationId)))
 	return nil
 }
